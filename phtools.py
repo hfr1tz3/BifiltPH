@@ -59,52 +59,49 @@ def get_components(generators):
 #Input is a simplex tree object (filt) and its corresponding barcode
 def oldest_components(data, filt, barcode, N):
     
-    print(100*'-')
+    print(100 * '-')
     print('       CONNECTED COMPONENTS:')
     
-    #Get number of time indices
+    # Get number of time indices
     datalength = data.shape[-1]
-    print(" Datalength = %s" % datalength)
+    print(" Datalength =", datalength)
 
-    filt_vals = np.array([filt[n][1] for n in range(len(filt))]) #--- OLD 3.1.1 version
+    # Convert the generator to a list or tuple to access its elements
+    filt_list = list(filt)  # Convert generator to list
+    filt_vals = np.array([filt_list[n][1] for n in range(len(filt_list))])
+
     death_times = []
     for component in barcode:
-        if component[0] == 0: #we only want deathtimes of components (=H0, hence the 0 value)
+        if component[0] == 0:  # Filter components based on condition
             deathtime = component[1][1]
             death_times.append(deathtime)
-       
 
-    #If there are <N components to pick from then just take all of them
-    if (len(death_times)<N):
+    # If there are fewer than N components to pick from, redefine N
+    if len(death_times) < N:
         print(" Less components available than what was asked for. Redefining N.")
         N = len(death_times)
     
-    print(" N = %s" % N)
+    print(" N =", N)
     
-    #Now add 0 to the end for convenience
+    # Now add 0 to the end for convenience
     death_times.append(0.)
       
-    #Get the generators up to this filtration value
+    # Get the generators up to this filtration value
     filt1 = death_times[N-1]
-    #filt0 = death_times[N]
     filt0 = 0.
-    print(' Looking at filtration values between %s and %s' % (filt1, filt0))
+    print(' Looking at filtration values between', filt1, 'and', filt0)
     generators_between = []
-    for n in range(len(filt)):
-        if (filt1>filt_vals[n]>filt0) and (len(filt[n][0]) > 1):
-            generators_between.append(filt[n][0])
+    for n in range(len(filt_list)):
+        if filt1 > filt_list[n][1] > filt0 and len(filt_list[n][0]) > 1:
+            generators_between.append(filt_list[n][0])
     
-   
-
-    #Get the first guess of connected components
+    # Get the first guess of connected components
     print(" ...building initial set of components from Gudhi generators...")
     components = get_components(generators_between)
-   
     
-    #Now add in all points within a ball of radius death_time around each generator of these components,
-    #and each point within a ball of radius death_time around each of these new points, etc.,
-    #recursively until you've exhausted all points in your dataset
-    maximum_radius = death_times[N]
+    # Continue with the rest of your function logic...
+    
+    maximum_radius = death_times[N]  # Ensure N is within bounds
     
     missing_points = []
     for n in range(data.shape[-1]):
@@ -113,96 +110,72 @@ def oldest_components(data, filt, barcode, N):
             if n in comp:
                 found = True
                 
-        if not(found):
+        if not found:
             missing_points.append(n)
     
     missing_points.sort()
     M = len(missing_points)
 
-    print(" Missing points: %s" % M)
+    print(" Missing points:", M)
     
     if M == 0:
         print(" All components found!")
-    
-        #We also want the number of points of each component
-        comp_sizes = []
-        for comp in components:
-            comp_sizes.append(len(comp))
-        comp_sizes = np.array(comp_sizes)
-        print(" Size of components found: %s" % (comp_sizes))
+        
+        # Calculate sizes of each component found
+        comp_sizes = np.array([len(comp) for comp in components])
+        print(" Size of components found:", comp_sizes)
         return components, death_times, comp_sizes
     else:
-        pass
-    
-    print(" ...searching for singletons...")
-    
-    #First find singletons. These are points that are >maximum_radius radius away from any other point
-    inds_to_pop = []
-    for m in missing_points:
-        dists = [dist(m, k, data) for k in range(data.shape[-1])]
-        dists.pop(dists.index(0.))
-        if np.array(dists).min() >= maximum_radius:
-            print(" Found singleton with nearest neighbour at distance %s" % np.array(dists).min())
-            components.append(np.array([m]))
-            inds_to_pop.append(missing_points.index(m))
-    
-    #missing_points.pop(inds_to_pop)
-    if len(inds_to_pop) > 0:
-        for index in sorted(inds_to_pop, reverse=True):
-            del missing_points[index]
-    
-    
-    M = len(missing_points)
-    
-    def find_comp(m, components):
+        print(" ...searching for singletons...")
         
-        for n in range(len(components)):
-            comp = components[n]
-            if m in comp:
-                pass
-            else:
-                for ind in comp:
-                    if dist(m, ind, data) <= maximum_radius:
-                        return n
-
-
-    cnter=0 #Don't loop more than 20 times
-    while (M>0 and cnter < 20):
-        print(" Still have missing values. Probing balls of increasing radii")
-        print(" ...missing points: %s" % M)
+        inds_to_pop = []
         for m in missing_points:
-            n = find_comp(m, components)
-            if not(n is None) and not(m in components[n]):
-                components[n] = np.append(components[n], m)
-                missing_points.pop(missing_points.index(m))
-                M -= 1
-            cnter += 1
-   
-    if cnter == 20:
-        print(" WARNING: Counter reached its limit!!")
-        print(" Proceeding anyway...")
-    else:
-        print(" All components found!")
+            dists = [dist(m, k, data) for k in range(data.shape[-1])]
+            dists.pop(dists.index(0.))
+            if np.array(dists).min() >= maximum_radius:
+                print(" Found singleton with nearest neighbour at distance", np.array(dists).min())
+                components.append(np.array([m]))
+                inds_to_pop.append(missing_points.index(m))
+        
+        if len(inds_to_pop) > 0:
+            for index in sorted(inds_to_pop, reverse=True):
+                del missing_points[index]
+        
+        M = len(missing_points)
+        
+        cnter = 0  # Limit looping to 20 times
+        while M > 0 and cnter < 20:
+            print(" Still have missing values. Probing balls of increasing radii")
+            print(" ...missing points:", M)
+            for m in missing_points:
+                n = find_comp(m, components)
+                if n is not None and m not in components[n]:
+                    components[n] = np.append(components[n], m)
+                    missing_points.pop(missing_points.index(m))
+                    M -= 1
+                cnter += 1
+        
+        if cnter == 20:
+            print(" WARNING: Counter reached its limit!!")
+            print(" Proceeding anyway...")
+        else:
+            print(" All components found!")
+        
+        # Remove duplicates from components
+        components_clean = [np.array(list(set(comp))) for comp in components]
+        
+        # Calculate sizes of each clean component
+        comp_sizes = np.array([len(comp) for comp in components_clean])
+        print(" Size of components found:", comp_sizes)
+        
+        return components_clean, death_times, comp_sizes
 
-
-    #Kill any doubles
-    components_clean = []
-    for comp in components:
-        components_clean.append(np.array(list(set(comp))))
-    
-    components_clean = components
-    #components = components_clean
-    
-    #We also want the number of points of each component
-    comp_sizes = []
-    for comp in components:
-        comp_sizes.append(len(comp))
-    comp_sizes = np.array(comp_sizes)
-
-    print(" Size of components found: %s" % (comp_sizes))
-
-    return components_clean, death_times, comp_sizes
-
+# Helper function to find connected component containing point m
+def find_comp(m, components):
+    for n, comp in enumerate(components):
+        if m in comp:
+            return n
+    return None
 
 
 def persloop(data_location=None,data=None,use_pl=True,**kwargs):
